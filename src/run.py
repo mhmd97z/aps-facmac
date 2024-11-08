@@ -84,11 +84,21 @@ def evaluate_sequential(args, runner):
 
 
 def run_sequential(args, logger):
-
+    logger.console_logger.debug("run_sequential invoked")
     # Init runner so we can get env info
     runner = r_REGISTRY[args.runner](args=args, logger=logger)
 
     # Set up schemes and groups here
+    if args.env == "aps":
+        env_info = runner.get_env_info()
+        args.n_agents = env_info["n_agents"]
+        args.n_actions = env_info["n_actions"]
+        args.state_shape = env_info["state_shape"]
+        args.obs_shape = env_info["obs_shape"]
+        args.action_spaces = env_info["action_spaces"]
+        args.actions_dtype = env_info["actions_dtype"]
+        args.normalise_actions = False
+
     if 'particle' not in args.env and "cts_matrix_game" not in args.env and "mujoco_multi" not in args.env:
         env_info = runner.get_env_info()
         args.n_agents = env_info["n_agents"]
@@ -99,7 +109,7 @@ def run_sequential(args, logger):
         scheme = {
             "state": {"vshape": env_info["state_shape"]},
             "obs": {"vshape": env_info["obs_shape"], "group": "agents"},
-            "actions": {"vshape": (1,), "group": "agents", "dtype": th.long},
+            "actions": {"vshape": (1,), "group": "agents", "dtype": th.float32},
             "avail_actions": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.int},
             "reward": {"vshape": (1,)},
             "terminated": {"vshape": (1,), "dtype": th.uint8},
@@ -128,21 +138,21 @@ def run_sequential(args, logger):
                 for _actid in range(args.action_spaces[_aid].shape[0]):
                     _action_min = args.action_spaces[_aid].low[_actid]
                     _action_max = args.action_spaces[_aid].high[_actid]
-                    mult_coef_tensor[_aid, _actid] = np.asscalar(_action_max - _action_min)
-                    action_min_tensor[_aid, _actid] = np.asscalar(_action_min)
+                    mult_coef_tensor[_aid, _actid] = (_action_max - _action_min).item()
+                    action_min_tensor[_aid, _actid] = (_action_min).item()
         elif all([isinstance(act_space, spaces.Tuple) for act_space in args.action_spaces]):
             for _aid in range(args.n_agents):
                 for _actid in range(args.action_spaces[_aid].spaces[0].shape[0]):
                     _action_min = args.action_spaces[_aid].spaces[0].low[_actid]
                     _action_max = args.action_spaces[_aid].spaces[0].high[_actid]
-                    mult_coef_tensor[_aid, _actid] = np.asscalar(_action_max - _action_min)
-                    action_min_tensor[_aid, _actid] = np.asscalar(_action_min)
+                    mult_coef_tensor[_aid, _actid] = (_action_max - _action_min).item()
+                    action_min_tensor[_aid, _actid] = (_action_min).item()
                 for _actid in range(args.action_spaces[_aid].spaces[1].shape[0]):
                     _action_min = args.action_spaces[_aid].spaces[1].low[_actid]
                     _action_max = args.action_spaces[_aid].spaces[1].high[_actid]
                     tmp_idx = _actid + args.action_spaces[_aid].spaces[0].shape[0]
-                    mult_coef_tensor[_aid, tmp_idx] = np.asscalar(_action_max - _action_min)
-                    action_min_tensor[_aid, tmp_idx] = np.asscalar(_action_min)
+                    mult_coef_tensor[_aid, tmp_idx] = (_action_max - _action_min).item()
+                    action_min_tensor[_aid, tmp_idx] = (_action_min).item()
 
         args.actions2unit_coef = mult_coef_tensor
         args.actions2unit_coef_cpu = mult_coef_tensor.cpu()
@@ -196,6 +206,11 @@ def run_sequential(args, logger):
             }
         else:
             preprocess = {}
+
+    print("env_info: ", env_info)
+    print("scheme: ", scheme)
+    print("preprocess: ", preprocess)
+    print("groups: ", groups)
 
     buffer = ReplayBuffer(scheme, groups, args.buffer_size, env_info["episode_limit"] + 1 if args.runner_scope == "episodic" else 2,
                           preprocess=preprocess,
@@ -257,16 +272,29 @@ def run_sequential(args, logger):
 
     logger.console_logger.info("Beginning training for {} timesteps".format(args.t_max))
 
+    cntr_i = 0
     while runner.t_env <= args.t_max:
-
+        print("\nOuter loop {}".format(cntr_i))
+        logger.console_logger.info("Outer loop {}".format(cntr_i))
+        cntr_i += 1
         # Run for a whole episode at a time
         if getattr(args, "runner_scope", "episodic") == "episodic":
             episode_batch = runner.run(test_mode=False, learner=learner)
             buffer.insert_episode_batch(episode_batch)
-
-            if buffer.can_sample(args.batch_size) and (buffer.episodes_in_buffer > getattr(args, "buffer_warmup", 0)):
+            print("episode data is captured!")
+            can_sample = buffer.can_sample(args.batch_size)
+            warmed_up = buffer.episodes_in_buffer > getattr(args, "buffer_warmup", 0)
+            # logger.console_logger.info(f"can_sample: {can_sample} --- warmed_up: {warmed_up}")
+            if can_sample and warmed_up:
+                logger.console_logger.info("Take a training step")
                 episode_sample = buffer.sample(args.batch_size)
-
+                print("episode_sample: ", episode_sample)
+                print("state: ", episode_sample['state'].shape)
+                print("obs: ", episode_sample['obs'].shape)
+                print("actions: ", episode_sample['actions'].shape)
+                # print("actions: ", episode_sample['actions'])
+                print("reward: ", episode_sample['reward'].shape)
+                # print("reward: ", episode_sample['reward'])
                 # Truncate batch to only filled timesteps
                 max_ep_t = episode_sample.max_t_filled()
                 episode_sample = episode_sample[:, :max_ep_t]

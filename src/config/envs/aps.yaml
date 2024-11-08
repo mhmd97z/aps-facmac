@@ -1,0 +1,27 @@
+env: "aps"
+
+env_args:
+  use_gnn_embedding: True
+  embedding_length: 16
+  history_length: 1
+  reward: se_requirement
+  # reward_power_consumption_coef: 0.2
+  sinr_threshold: 0.0
+  barrier_function: exponential # exponential
+  reward_sla_viol_coef: 5 # 10-20 for step, 5 for exponential
+  episode_limit: 50
+
+  simulation_scenario:
+    if_use_cuda_sim: True
+    step_length: 1
+    morphology: urban
+    number_of_ues: 4
+    number_of_aps: 24
+    max_serving_ue_count: 4
+    max_measurment_ap_count: 24
+    power_control_saved_model: ./envs/aps/lib/gnn_olp/trained_model/checkpoints/best_epoch=953.ckpt
+    data_normalization_config: ./envs/aps/lib/gnn_olp/normalization_config.yaml
+    precoding_algorithm: olp # olp, mrt
+    seed: 100
+    float_dtype_sim: torch.float32
+    ap_radiation_power: 0.2

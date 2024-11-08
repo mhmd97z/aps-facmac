@@ -20,7 +20,7 @@ buffer_algo: ~
 buffer_chunk_size: ~
 
 # --- Logging options ---
-use_tensorboard: False # Log results to tensorboard
+use_tensorboard: True # Log results to tensorboard
 save_model: False # Save the models to disk
 save_model_interval: 100000 # Save models after this many timesteps
 checkpoint_path: "" # Load a checkpoint from this path

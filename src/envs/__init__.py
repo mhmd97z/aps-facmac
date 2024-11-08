@@ -5,7 +5,7 @@ from .matrix_game.cts_matrix_game import Matrixgame as CtsMatrix
 from .particle import Particle
 from .mamujoco import ManyAgentAntEnv, ManyAgentSwimmerEnv, MujocoMulti
 from smac.env import MultiAgentEnv, StarCraft2Env
-
+from .aps import Aps
 
 def env_fn(env, **kwargs) -> MultiAgentEnv:
     # env_args = kwargs.get("env_args", {})
@@ -18,3 +18,4 @@ REGISTRY["mujoco_multi"] = partial(env_fn, env=MujocoMulti)
 REGISTRY["manyagent_swimmer"] = partial(env_fn, env=ManyAgentSwimmerEnv)
 REGISTRY["manyagent_ant"] = partial(env_fn, env=ManyAgentAntEnv)
 REGISTRY["sc2"] = partial(env_fn, env=StarCraft2Env)
+REGISTRY["aps"] = partial(env_fn, env=Aps)

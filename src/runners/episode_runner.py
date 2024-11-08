@@ -59,13 +59,14 @@ class EpisodeRunner:
         terminated = False
         episode_return = 0
         self.mac.init_hidden(batch_size=self.batch_size)
-
-        while not terminated:
-
+        cntr_i = 0
+        while not terminated and cntr_i < self.args.env_args['episode_limit']-1:
+            # print("cntr_i: ", cntr_i)
+            cntr_i += 1
             pre_transition_data = {
                 "state": [self.env.get_state()],
                 "avail_actions": [self.env.get_avail_actions()],
-                "obs": [self.env.get_obs()]
+                "obs": self.env.get_obs()
             }
 
             self.batch.update(pre_transition_data, ts=self.t)
@@ -95,7 +96,7 @@ class EpisodeRunner:
                 "reward": [(reward,)],
                 "terminated": [(terminated != env_info.get("episode_limit", False),)],
             }
-
+            # print("post_transition_data: ", post_transition_data)
             self.batch.update(post_transition_data, ts=self.t)
 
             self.t += 1
@@ -103,7 +104,7 @@ class EpisodeRunner:
         last_data = {
             "state": [self.env.get_state()],
             "avail_actions": [self.env.get_avail_actions()],
-            "obs": [self.env.get_obs()]
+            "obs": self.env.get_obs()
         }
         self.batch.update(last_data, ts=self.t)
 
@@ -129,7 +130,7 @@ class EpisodeRunner:
         if not test_mode:
             self.t_env += self.t
 
-        cur_returns.append(episode_return)
+        cur_returns.append(episode_return.item() if isinstance(episode_return, th.Tensor) else episode_return)
 
         if test_mode and (len(self.test_returns) == self.args.test_nepisode):
             self._log(cur_returns, cur_stats, log_prefix)

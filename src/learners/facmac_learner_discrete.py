@@ -1,7 +1,7 @@
 import copy
 from components.episode_buffer import EpisodeBatch
 from modules.critics.facmac import FACMACDiscreteCritic
-from components.action_selectors import multinomial_entropy
+# from components.action_selectors import multinomial_entropy
 import torch as th
 from torch.optim import RMSprop, Adam
 from modules.mixers.vdn import VDNMixer
@@ -58,8 +58,11 @@ class FACMACDiscreteLearner:
         self.critic_training_steps = 0
 
     def train(self, batch: EpisodeBatch, t_env: int, episode_num: int):
+        print("FACMACDiscreteLearner trainer() is invoked")
+        print("batch size: ", batch.batch_size)
         # Get the relevant quantities
         rewards = batch["reward"][:, :-1]
+        print("rewards: ", rewards.shape)
         # actions = batch["actions"][:, :]
         actions = batch["actions_onehot"][:, :]
         terminated = batch["terminated"].float()
@@ -74,13 +77,17 @@ class FACMACDiscreteLearner:
             target_act_outs = self.target_mac.select_actions(batch, t_ep=t, t_env=t_env, test_mode=True)
             target_mac_out.append(target_act_outs)
         target_mac_out = th.stack(target_mac_out, dim=1)  # Concat over time
+        print("stacked target_mac_out: ", target_mac_out.shape)
 
+        print("agents obs: ", batch["obs"][:, :-1].shape, ", action: ", actions[:, :-1].shape)
         q_taken, _ = self.critic(batch["obs"][:, :-1], actions[:, :-1])
+        print("q_agent: ", q_taken.shape)
         if self.mixer is not None:
             if self.args.mixer == "vdn":
                 q_taken = self.mixer(q_taken.view(-1, self.n_agents, 1), batch["state"][:, :-1])
             else:
                 q_taken = self.mixer(q_taken.view(batch.batch_size, -1, 1), batch["state"][:, :-1])
+        print("q_mixed: ", q_taken.shape)
 
         target_vals, _ = self.target_critic(batch["obs"][:, :], target_mac_out.detach())
         if self.mixer is not None:
@@ -157,6 +164,8 @@ class FACMACDiscreteLearner:
             self.logger.log_stat("target_mean", (targets * mask).sum().item() / (mask_elems * self.args.n_agents),
                                  t_env)
             self.log_stats_t = t_env
+
+        print("training is done")
 
     def _update_targets_soft(self, tau):
         for target_param, param in zip(self.target_mac.parameters(), self.mac.parameters()):

@@ -105,7 +105,11 @@ class EpisodeBatch:
                 raise KeyError("{} not found in transition or episode data".format(k))
 
             dtype = self.scheme[k].get("dtype", th.float32)
-            v = th.tensor(v, dtype=dtype, device=self.device)
+            try:
+                v = th.tensor(v, dtype=dtype, device=self.device)
+            except:
+                v = th.stack(v, dim=0)
+
             try:
                 self._check_safe_view(v, target[k][_slices])
             except Exception as e:

@@ -40,8 +40,11 @@ class MADDPGDiscreteLearner:
         self.critic_training_steps = 0
 
     def train(self, batch: EpisodeBatch, t_env: int, episode_num: int):
+        print("MADDPGDiscreteLearner trainer() is invoked")
+        print("batch size: ", batch.batch_size)
         # Get the relevant quantities
         rewards = batch["reward"][:, :-1]
+        print("rewards: ", rewards.shape)
         # actions = batch["actions"][:, :]
         actions = batch["actions_onehot"][:, :]
         terminated = batch["terminated"].float()
@@ -56,10 +59,13 @@ class MADDPGDiscreteLearner:
             target_agent_outs = self.target_mac.select_actions(batch, t_ep=t, t_env=t_env, test_mode=True)
             target_mac_out.append(target_agent_outs)
         target_mac_out = th.stack(target_mac_out, dim=1)  # Concat over time
-
+        print("stacked target_mac_out: ", target_mac_out.shape)
+        
+        print("agents state: ", batch["state"][:, :-1].shape, ", action: ", actions[:, :-1].shape)
         q_taken, _ = self.critic(batch["state"][:, :-1], actions[:, :-1])
         target_vals, _ = self.target_critic(batch["state"][:, :], target_mac_out.detach())
-
+        print("q_agent: ", q_taken.shape)
+        
         q_taken = q_taken.view(batch.batch_size, -1, 1)
         target_vals = target_vals.view(batch.batch_size, -1, 1)
         targets = build_td_lambda_targets(batch["reward"], terminated, mask, target_vals, self.n_agents,
@@ -87,6 +93,7 @@ class MADDPGDiscreteLearner:
                 q, _ = self.critic(self._build_inputs(batch, t=t), tem_joint_act)
                 chosen_action_qvals.append(q.view(batch.batch_size, -1, 1))
         chosen_action_qvals = th.stack(chosen_action_qvals, dim=1)
+        print("chosen_action_qvals: ", chosen_action_qvals.shape)
 
         # Compute the actor loss
         pg_loss = -chosen_action_qvals.mean()

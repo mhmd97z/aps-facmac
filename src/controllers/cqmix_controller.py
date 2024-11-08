@@ -10,6 +10,7 @@ class CQMixMAC(BasicMAC):
 
     def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), test_mode=False, past_actions=None, critic=None,
                        target_mac=False, explore_agent_ids=None):
+        print("qmix sleection actions is invoked")
         avail_actions = ep_batch["avail_actions"][bs, t_ep]
 
         if t_ep is not None and t_ep > 0:
@@ -94,8 +95,8 @@ class CQMixMAC(BasicMAC):
         if all([isinstance(act_space, spaces.Box) for act_space in self.args.action_spaces]):
             for _aid in range(self.n_agents):
                 for _actid in range(self.args.action_spaces[_aid].shape[0]):
-                    chosen_actions[:, _aid, _actid].clamp_(np.asscalar(self.args.action_spaces[_aid].low[_actid]),
-                                                           np.asscalar(self.args.action_spaces[_aid].high[_actid]))
+                    chosen_actions[:, _aid, _actid].clamp_((self.args.action_spaces[_aid].low[_actid]).item(),
+                                                           (self.args.action_spaces[_aid].high[_actid]).item())
         elif all([isinstance(act_space, spaces.Tuple) for act_space in self.args.action_spaces]):   # NOTE: This was added to handle scenarios like simple_reference since action space is Tuple
             for _aid in range(self.n_agents):
                 for _actid in range(self.args.action_spaces[_aid].spaces[0].shape[0]):
@@ -113,6 +114,7 @@ class CQMixMAC(BasicMAC):
     def forward(self, ep_batch, t, actions=None, hidden_states=None, select_actions=False, test_mode=False):
         agent_inputs = self._build_inputs(ep_batch, t)
         ret = self.agent(agent_inputs, self.hidden_states, actions=actions)
+        print("agent ret: ", ret)
         if select_actions:
             self.hidden_states = ret["hidden_state"]
             return ret

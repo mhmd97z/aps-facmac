@@ -55,13 +55,18 @@ class FACMACLearner:
         self.log_stats_t = -self.args.learner_log_interval - 1
 
     def train(self, batch: EpisodeBatch, t_env: int, episode_num: int):
+        print("------ trainer is invoked")
         # Get the relevant quantities
         rewards = batch["reward"][:, :-1]
         actions = batch["actions"][:, :-1]
         terminated = batch["terminated"][:, :-1].float()
         mask = batch["filled"][:, :-1].float()
         mask[:, 1:] = mask[:, 1:] * (1 - terminated[:, :-1])
-
+        print("rewards: ", rewards.shape)
+        print("actions: ", actions.shape)
+        print("terminated: ", terminated.shape)
+        print("mask: ", mask.shape)
+        print(" ----------------- ")
         # Train the critic batched
         target_actions = []
         self.target_mac.init_hidden(batch.batch_size)
