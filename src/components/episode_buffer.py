@@ -2,6 +2,8 @@ import torch as th
 import numpy as np
 from types import SimpleNamespace as SN
 
+from torch_geometric.data import HeteroData
+from utils.graph_storage import GraphBatchStorage
 
 class EpisodeBatch:
 
@@ -73,18 +75,29 @@ class EpisodeBatch:
                 shape = vshape
 
             if episode_const:
-                self.data.episode_data[field_key] = th.zeros((batch_size, *shape), dtype=dtype, device=self.device)
+                if dtype == HeteroData:
+                    raise NotImplementedError
+                    self.data.transition_data[field_key] = GraphBatchStorage(1, max_seq_length)
+                    print("1 self.data.episode_data[field_key]: ", self.data.episode_data[field_key].shape)
+                else:
+                    self.data.episode_data[field_key] = th.zeros((batch_size, *shape), dtype=dtype, device=self.device)
             else:
-                self.data.transition_data[field_key] = th.zeros((batch_size, max_seq_length, *shape), dtype=dtype, device=self.device)
+                if dtype == HeteroData:
+                    self.data.transition_data[field_key] = GraphBatchStorage(batch_size, max_seq_length)
+                else:
+                    self.data.transition_data[field_key] = th.zeros((batch_size, max_seq_length, *shape), 
+                                                                    dtype=dtype, device=self.device)
 
     def extend(self, scheme, groups=None):
         self._setup_data(scheme, self.groups if groups is None else groups, self.batch_size, self.max_seq_length)
 
     def to(self, device):
         for k, v in self.data.transition_data.items():
-            self.data.transition_data[k] = v.to(device)
+            if isinstance(self.data.transition_data[k], th.Tensor):
+                self.data.transition_data[k] = v.to(device)
         for k, v in self.data.episode_data.items():
-            self.data.episode_data[k] = v.to(device)
+            if isinstance(self.data.transition_data[k], th.Tensor):
+                self.data.episode_data[k] = v.to(device)
         self.device = device
         return self
 
@@ -105,17 +118,21 @@ class EpisodeBatch:
                 raise KeyError("{} not found in transition or episode data".format(k))
 
             dtype = self.scheme[k].get("dtype", th.float32)
-            try:
-                v = th.tensor(v, dtype=dtype, device=self.device)
-            except:
-                v = th.stack(v, dim=0)
+            if dtype != HeteroData:
+                # print("v: ", v)
+                try:
+                    v = th.tensor(v, dtype=dtype, device=self.device)
+                except:
+                    v = th.stack(v, dim=0)
 
-            try:
-                self._check_safe_view(v, target[k][_slices])
-            except Exception as e:
-                a = 5
-                pass
-            target[k][_slices] = v.view_as(target[k][_slices])
+                try:
+                    self._check_safe_view(v, target[k][_slices])
+                except Exception as e:
+                    a = 5
+                    pass
+                target[k][_slices] = v.view_as(target[k][_slices])
+            else:
+                target[k].set_graph(slices, v)
 
             if k in self.preprocess:
                 try:
@@ -140,10 +157,17 @@ class EpisodeBatch:
 
     def __getitem__(self, item):
         if isinstance(item, str):
+            dtype = self.scheme[item].get("dtype", th.float32)
             if item in self.data.episode_data:
-                return self.data.episode_data[item].to(self.device)
+                if dtype == HeteroData:
+                    self.data.episode_data[item]
+                else:
+                    return self.data.episode_data[item].to(self.device)
             elif item in self.data.transition_data:
-                return self.data.transition_data[item].to(self.device)
+                if dtype == HeteroData:
+                    return self.data.transition_data[item]
+                else:
+                    return self.data.transition_data[item].to(self.device)
             else:
                 raise ValueError
         elif isinstance(item, tuple) and all([isinstance(it, str) for it in item]):
@@ -505,12 +529,12 @@ class ReplayBuffer(EpisodeBatch):
     def sample(self, batch_size):
         assert self.can_sample(batch_size)
         if self.episodes_in_buffer == batch_size:
-            out_batch = self[:batch_size].clone().share().to(self.out_device)
+            out_batch = self[:batch_size].clone() # .share()
             return out_batch.to(self.out_device)
         else:
             # Uniform sampling only atm
             ep_ids = np.random.choice(self.episodes_in_buffer, batch_size, replace=False).tolist()
-            out_batch = self[ep_ids].clone().share().to(self.out_device)
+            out_batch = self[ep_ids].clone()# .share()
             return out_batch.to(self.out_device)
 
     def __repr__(self):

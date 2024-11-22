@@ -19,6 +19,7 @@ from controllers import REGISTRY as mac_REGISTRY
 from components.episode_buffer import ReplayBuffer
 from components.transforms import OneHot
 
+from torch_geometric.data import HeteroData
 
 def run(_run, _config, _log, pymongo_client=None):
 
@@ -38,10 +39,10 @@ def run(_run, _config, _log, pymongo_client=None):
     _log.info("\n\n" + experiment_params + "\n")
 
     # configure tensorboard logger
-    unique_token = "{}__{}".format(args.name, datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    unique_token = "{}_{}".format(args.env_args['reward_sla_viol_coef1'], args.env_args['reward_sla_viol_coef2']) # datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
     args.unique_token = unique_token
     if args.use_tensorboard:
-        tb_logs_direc = os.path.join(dirname(dirname(abspath(__file__))), "results", "tb_logs")
+        tb_logs_direc = os.path.join(dirname(dirname(abspath(__file__))), "results", "tb_logs", f"{args.name}", f"{args.exp_name}")
         tb_exp_direc = os.path.join(tb_logs_direc, "{}").format(unique_token)
         logger.setup_tb(tb_exp_direc)
 
@@ -99,7 +100,22 @@ def run_sequential(args, logger):
         args.actions_dtype = env_info["actions_dtype"]
         args.normalise_actions = False
 
-    if 'particle' not in args.env and "cts_matrix_game" not in args.env and "mujoco_multi" not in args.env:
+        scheme = {
+            "state": {"vshape": env_info["state_shape"]},
+            "obs": {"vshape": env_info["obs_shape"], "group": "agents", "dtype": HeteroData},
+            "actions": {"vshape": (1,), "group": "agents", "dtype": th.float32},
+            "avail_actions": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.int},
+            "reward": {"vshape": (1,), "group": "agents"},
+            "terminated": {"vshape": (1,), "dtype": th.uint8},
+        }
+        groups = {
+            "agents": args.n_agents
+        }
+        preprocess = {
+            "actions": ("actions_onehot", [OneHot(out_dim=args.n_actions)])
+        }
+
+    elif 'particle' not in args.env and "cts_matrix_game" not in args.env and "mujoco_multi" not in args.env:
         env_info = runner.get_env_info()
         args.n_agents = env_info["n_agents"]
         args.n_actions = env_info["n_actions"]
@@ -281,28 +297,31 @@ def run_sequential(args, logger):
         if getattr(args, "runner_scope", "episodic") == "episodic":
             episode_batch = runner.run(test_mode=False, learner=learner)
             buffer.insert_episode_batch(episode_batch)
-            print("episode data is captured!")
+
             can_sample = buffer.can_sample(args.batch_size)
             warmed_up = buffer.episodes_in_buffer > getattr(args, "buffer_warmup", 0)
             # logger.console_logger.info(f"can_sample: {can_sample} --- warmed_up: {warmed_up}")
             if can_sample and warmed_up:
                 logger.console_logger.info("Take a training step")
                 episode_sample = buffer.sample(args.batch_size)
-                print("episode_sample: ", episode_sample)
+                # Truncate batch to only filled timesteps
+                max_ep_t = episode_sample.max_t_filled()
+                episode_sample = episode_sample[:, :max_ep_t]
+
+                print("\nTake a training step...")
                 print("state: ", episode_sample['state'].shape)
+                # print("state: ", episode_sample['state'])
                 print("obs: ", episode_sample['obs'].shape)
                 print("actions: ", episode_sample['actions'].shape)
                 # print("actions: ", episode_sample['actions'])
                 print("reward: ", episode_sample['reward'].shape)
                 # print("reward: ", episode_sample['reward'])
-                # Truncate batch to only filled timesteps
-                max_ep_t = episode_sample.max_t_filled()
-                episode_sample = episode_sample[:, :max_ep_t]
 
                 if episode_sample.device != args.device:
                     episode_sample.to(args.device)
 
                 learner.train(episode_sample, runner.t_env, episode)
+
         elif getattr(args, "runner_scope", "episode") == "transition":
             runner.run(test_mode=False,
                        buffer=buffer,

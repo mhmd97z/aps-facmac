@@ -1,15 +1,17 @@
 env: "aps"
+exp_name: "loose_req"
 
 env_args:
-  use_gnn_embedding: True
+  use_gnn_embedding: False
   embedding_length: 16
   history_length: 1
   reward: se_requirement
-  # reward_power_consumption_coef: 0.2
-  sinr_threshold: 0.0
+  reward_power_consumption_coef: 0.0
+  sinr_threshold: -50.0
   barrier_function: exponential # exponential
-  reward_sla_viol_coef: 5 # 10-20 for step, 5 for exponential
-  episode_limit: 50
+  reward_sla_viol_coef1: 1 # 10-20 for step, 5 for exponential
+  reward_sla_viol_coef2: 5
+  episode_limit: 8
 
   simulation_scenario:
     if_use_cuda_sim: True

@@ -7,10 +7,10 @@ from torch.optim import RMSprop, Adam
 from modules.mixers.vdn import VDNMixer
 from modules.mixers.qmix import QMixer
 from modules.mixers.qmix_ablations import VDNState, QMixerNonmonotonic
-from utils.rl_utils import build_td_lambda_targets
+from utils.rl_utils import build_td_lambda_targets_aps
 
 
-class FACMACDiscreteLearner:
+class ApsLearner:
     def __init__(self, mac, scheme, logger, args):
         self.args = args
         self.n_agents = args.n_agents
@@ -21,26 +21,24 @@ class FACMACDiscreteLearner:
         self.target_mac = copy.deepcopy(self.mac)
         self.agent_params = list(mac.parameters())
 
-        if args.agent == "gnn":
-            self.critic = FACMACDiscreteCriticGNN(scheme, args)
-        else:
-            self.critic = FACMACDiscreteCritic(scheme, args)
+        self.critic = FACMACDiscreteCriticGNN(scheme, args)
+        
         self.target_critic = copy.deepcopy(self.critic)
         self.critic_params = list(self.critic.parameters())
         self.mixer = None
-        if args.mixer is not None and self.args.n_agents > 1:  # if just 1 agent do not mix anything
-            if args.mixer == "vdn":
-                self.mixer = VDNMixer()
-            elif args.mixer == "qmix":
-                self.mixer = QMixer(args)
-            elif args.mixer == "vdn-s":
-                self.mixer = VDNState(args)
-            elif args.mixer == "qmix-nonmonotonic":
-                self.mixer = QMixerNonmonotonic(args)
-            else:
-                raise ValueError("Mixer {} not recognised.".format(args.mixer))
-            self.critic_params += list(self.mixer.parameters())
-            self.target_mixer = copy.deepcopy(self.mixer)
+        # if args.mixer is not None and self.args.n_agents > 1:  # if just 1 agent do not mix anything
+        #     if args.mixer == "vdn":
+        #         self.mixer = VDNMixer()
+        #     elif args.mixer == "qmix":
+        #         self.mixer = QMixer(args)
+        #     elif args.mixer == "vdn-s":
+        #         self.mixer = VDNState(args)
+        #     elif args.mixer == "qmix-nonmonotonic":
+        #         self.mixer = QMixerNonmonotonic(args)
+        #     else:
+        #         raise ValueError("Mixer {} not recognised.".format(args.mixer))
+        #     self.critic_params += list(self.mixer.parameters())
+        #     self.target_mixer = copy.deepcopy(self.mixer)
 
         if getattr(self.args, "optimizer", "rmsprop") == "rmsprop":
             self.agent_optimiser = RMSprop(params=self.agent_params, lr=args.lr, alpha=args.optim_alpha, eps=args.optim_eps)
@@ -61,7 +59,7 @@ class FACMACDiscreteLearner:
         self.critic_training_steps = 0
 
     def train(self, batch: EpisodeBatch, t_env: int, episode_num: int):
-        print("FACMACDiscreteLearner trainer() is invoked")
+        print("\nApsLearner trainer() is invoked")
         # Get the relevant quantities
         rewards = batch["reward"][:, :-1]
         # actions = batch["actions"][:, :]
@@ -78,10 +76,8 @@ class FACMACDiscreteLearner:
             target_act_outs = self.target_mac.select_actions(batch, t_ep=t, t_env=t_env, test_mode=True)
             target_mac_out.append(target_act_outs)
         target_mac_out = th.stack(target_mac_out, dim=1)  # Concat over time
-        print("stacked target_mac_out: ", target_mac_out.shape)
 
         q_taken, _ = self.critic(batch["obs"][:, :-1], actions[:, :-1])
-        print("q_taken: ", q_taken.shape)
         # print("q_taken: ", q_taken)
         if self.mixer is not None:
             if self.args.mixer == "vdn":
@@ -103,15 +99,18 @@ class FACMACDiscreteLearner:
             q_taken = q_taken.view(batch.batch_size, -1, self.n_agents)
             target_vals = target_vals.view(batch.batch_size, -1, self.n_agents)
 
-        print("q_mixed: ", q_taken.shape)
-        targets = build_td_lambda_targets(batch["reward"], terminated, mask, target_vals, self.n_agents,
+        targets = build_td_lambda_targets_aps(batch["reward"], terminated, mask, target_vals, self.n_agents,
                                           self.args.gamma, self.args.td_lambda)
+        print("target: ", targets.shape)
+        
         mask = mask[:, :-1]
         td_error = (q_taken - targets.detach())
         mask = mask.expand_as(td_error)
         masked_td_error = td_error * mask
         loss = (masked_td_error ** 2).sum() / mask.sum()
 
+        print("loss: ", loss)
+        
         self.critic_optimiser.zero_grad()
         loss.backward()
         critic_grad_norm = th.nn.utils.clip_grad_norm_(self.critic_params, self.args.grad_norm_clip)
@@ -127,8 +126,10 @@ class FACMACDiscreteLearner:
             act_outs = self.mac.select_actions(batch, t_ep=t, t_env=t_env, test_mode=False, explore=False)
             mac_out.append(act_outs)
         mac_out = th.stack(mac_out, dim=1)  # Concat over time
+        print("mac_out: ", mac_out.shape)
         chosen_action_qvals, _ = self.critic(batch["obs"][:, :-1], mac_out)
-
+        print("chosen_action_qvals: ", chosen_action_qvals.shape)
+        
         if self.mixer is not None:
             if self.args.mixer == "vdn":
                 chosen_action_qvals = self.mixer(chosen_action_qvals.view(-1, self.n_agents, 1),
@@ -138,8 +139,13 @@ class FACMACDiscreteLearner:
                 chosen_action_qvals = self.mixer(chosen_action_qvals.view(batch.batch_size, -1, 1),
                                                  batch["state"][:, :-1])
 
+        # sum of Q values to be minimized
+        chosen_action_qvals = th.sum(chosen_action_qvals, dim=2, keepdim=True)
         print("chosen_action_qvals: ", chosen_action_qvals.shape)
+
         # Compute the actor loss
+        # print("mask: ", mask.shape)
+        # print("mask: ", mask)
         pg_loss = - (chosen_action_qvals * mask).sum() / mask.sum()
 
         # Optimise agents

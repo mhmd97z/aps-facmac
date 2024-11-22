@@ -3,19 +3,19 @@ action_range: ~
 action_selector: "gumbel"
 epsilon_start: 0.5
 epsilon_finish: 0.05
-epsilon_anneal_time: 50000
-agent: qmixrnn
-obs_agent_id: True # Include the agent's one_hot id in the observation
-obs_last_action: True # Include the agent's last action (one_hot) in the observation
+epsilon_anneal_time: 10000
+agent: gnn
+obs_agent_id: False # Include the agent's one_hot id in the observation
+obs_last_action: False # Include the agent's last action (one_hot) in the observation
 agent_output_type: "pi_logits"
 batch_size_run: 1
-batch_size: 32
-buffer_size: 5000
+batch_size: 64
+buffer_size: 8192
 buffer_warmup: 0
 discretize_actions: False
 double_q: False
 epsilon_decay_mode: ~
-exploration_mode: "gaussian"
+exploration_mode: gaussian
 start_steps: 0 # Number of steps for uniform-random action selection, before running real policy. Helps exploration.
 act_noise: 0.1 # Stddev for Gaussian exploration noise added to policy at training time.
 ou_theta: 0.15 # D
@@ -24,22 +24,22 @@ ou_noise_scale: 0.3
 final_ou_noise_scale: 0.
 gamma: 0.01
 grad_norm_clip: 10
-learner: "facmac_learner_discrete"
+learner: aps_learner # "facmac_learner_discrete"
 learn_interval: 1
-lr: 0.0025
-critic_lr: 0.0005
-td_lambda: 0.8
+lr: 0.025
+critic_lr: 0.005
+td_lambda: 0.9
 critic_train_reps: 1
 q_nstep: 0  # 0 corresponds to default Q, 1 is r + gamma*Q, etc
 mac: basic_mac
-mixer: "vdn"
+mixer: ~
 mixing_embed_dim: 32
 skip_connections: False
 gated: False
 hypernet_layers: 2
 hypernet_embed: 64
 hyper_initialization_nonzeros: 0
-name: "facmac_aps_vdn"
+name: "facmac_aps"
 n_runners: ~
 n_train: 1
 optimizer: "adam" # D
@@ -65,4 +65,4 @@ env_args:
   state_last_action: False # critic adds last action internally
 agent_return_logits: False
 q_embed_dim: 1
-mask_before_softmax: True
+mask_before_softmax: False

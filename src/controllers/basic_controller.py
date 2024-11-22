@@ -28,6 +28,7 @@ class BasicMAC:
     def forward(self, ep_batch, t, return_logits=True):
         agent_inputs = self._build_inputs(ep_batch, t)
         avail_actions = ep_batch["avail_actions"][:, t]
+        # print("agent_inputs: ", agent_inputs)
         agent_outs, self.hidden_states = self.agent(agent_inputs, self.hidden_states)
 
         if self.agent_output_type == "pi_logits":
@@ -44,7 +45,10 @@ class BasicMAC:
         return agent_outs.view(ep_batch.batch_size, self.n_agents, -1)
 
     def init_hidden(self, batch_size):
-        self.hidden_states = self.agent.init_hidden().unsqueeze(0).expand(batch_size, self.n_agents, -1)  # bav
+        if self.agent.init_hidden() is not None:
+            self.hidden_states = self.agent.init_hidden().unsqueeze(0).expand(batch_size, self.n_agents, -1)  # bav
+        else:
+            self.hidden_states = None
 
     def parameters(self):
         return self.agent.parameters()

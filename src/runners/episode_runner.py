@@ -58,17 +58,17 @@ class EpisodeRunner:
 
         terminated = False
         episode_return = 0
-        self.mac.init_hidden(batch_size=self.batch_size)
+        # self.mac.init_hidden(batch_size=self.batch_size)
         cntr_i = 0
         while not terminated and cntr_i < self.args.env_args['episode_limit']-1:
-            # print("cntr_i: ", cntr_i)
+
             cntr_i += 1
             pre_transition_data = {
                 "state": [self.env.get_state()],
                 "avail_actions": [self.env.get_avail_actions()],
                 "obs": self.env.get_obs()
             }
-
+            # print("pre_transition_data: ", pre_transition_data)
             self.batch.update(pre_transition_data, ts=self.t)
             if getattr(self.args, "action_selector", "epsilon_greedy") == "gumbel":
                 actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env,
@@ -87,13 +87,16 @@ class EpisodeRunner:
                     assert (reward[1:] == reward[:-1]), "reward has to be cooperative!"
                     reward = reward[0]
                 episode_return += reward
+            elif self.args.env == "aps":
+                reward, terminated, env_info = self.env.step(actions[0].cpu())
+                episode_return += reward.mean()
             else:
                 reward, terminated, env_info = self.env.step(actions[0].cpu())
                 episode_return += reward
 
             post_transition_data = {
                 "actions": actions,
-                "reward": [(reward,)],
+                "reward": reward, # [(reward,)],
                 "terminated": [(terminated != env_info.get("episode_limit", False),)],
             }
             # print("post_transition_data: ", post_transition_data)

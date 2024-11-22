@@ -33,6 +33,20 @@ def build_td_lambda_targets(rewards, terminated, mask, target_qs, n_agents, gamm
     # Returns lambda-return from t=0 to t=T-1, i.e. in B*T-1*A
     return ret[:, 0:-1]
 
+def build_td_lambda_targets_aps(rewards, terminated, mask, target_qs, n_agents, gamma, td_lambda):
+    # Assumes  <target_qs > in B*T*A and <reward >, <terminated >, <mask > in (at least) B*T-1*1
+    # Initialise  last  lambda -return  for  not  terminated  episodes
+    rewards = rewards.squeeze()
+    ret = target_qs.new_zeros(*target_qs.shape)
+    # raise
+    ret[:, -1] = target_qs[:, -1]
+    # Backwards  recursive  update  of the "forward  view"
+    for t in range(ret.shape[1] - 2, -1,  -1):
+        tmp1 = td_lambda * gamma * ret[:, t + 1]
+        tmp2 = mask[:, t] * (rewards[:, t] + (1 - td_lambda) * gamma * target_qs[:, t + 1])
+        ret[:, t] = tmp1 + tmp2
+    # Returns lambda-return from t=0 to t=T-1, i.e. in B*T-1*A
+    return ret[:, 0:-1]
 
 def preprocess_scheme(scheme, preprocess):
 
