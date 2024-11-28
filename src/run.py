@@ -302,6 +302,10 @@ def run_sequential(args, logger):
             warmed_up = buffer.episodes_in_buffer > getattr(args, "buffer_warmup", 0)
             # logger.console_logger.info(f"can_sample: {can_sample} --- warmed_up: {warmed_up}")
             if can_sample and warmed_up:
+                # import pickle
+                # with open('data.pkl', 'wb') as file:
+                #     pickle.dump(buffer, file)
+                #     raise
                 logger.console_logger.info("Take a training step")
                 episode_sample = buffer.sample(args.batch_size)
                 # Truncate batch to only filled timesteps

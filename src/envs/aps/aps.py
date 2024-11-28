@@ -48,6 +48,14 @@ class Aps(gym.Env):
         obs, state, reward, mask, info = self.compute_state_reward()
         done = False
 
+        # dict_ = {}
+        # dict_['obs'] = obs
+        # dict_['reward'] = reward
+        # dict_['action'] = actions
+        # import pickle
+        # with open('data_aps.pkl', 'wb') as file:
+        #     pickle.dump(dict_, file)
+        #     raise
         # return obs, state, reward, mask, done, info
         return reward, done, info
 
@@ -118,8 +126,12 @@ class Aps(gym.Env):
                 se_violation_cost = beta * (constraints < 0).float()
             else:
                 NotImplementedError
-            reward = (-se_violation_cost - power_coef).clone().detach()
+            se_violation_cost[se_violation_cost < 5.] = power_coef[se_violation_cost < 5.]
+            # reward = (-se_violation_cost - power_coef).clone().detach()
+            reward = (-se_violation_cost).clone().detach()
             print("in gym: power_coef: ", power_coef.shape, power_coef)
+            print("in gym: reward: ", reward)
+    
         else:
             raise NotImplementedError
         # reward = reward_.clone().detach()
@@ -138,6 +150,7 @@ class Aps(gym.Env):
             'power_coef': power_coef.mean()
         }
 
+        
         return obs, state, reward, mask, info
 
 

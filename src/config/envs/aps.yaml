@@ -1,5 +1,5 @@
-env: "aps"
-exp_name: "loose_req"
+env: aps
+exp_name: critic_test/new_arch_epsilon05a5000 # new_rew_linear_sinr_less_aps_loose_req
 
 env_args:
   use_gnn_embedding: False
@@ -7,10 +7,10 @@ env_args:
   history_length: 1
   reward: se_requirement
   reward_power_consumption_coef: 0.0
-  sinr_threshold: -50.0
+  sinr_threshold: 0.5
   barrier_function: exponential # exponential
-  reward_sla_viol_coef1: 1 # 10-20 for step, 5 for exponential
-  reward_sla_viol_coef2: 5
+  reward_sla_viol_coef1: 20 # 10-20 for step, 5 for exponential
+  reward_sla_viol_coef2: 200
   episode_limit: 8
 
   simulation_scenario:
@@ -18,12 +18,13 @@ env_args:
     step_length: 1
     morphology: urban
     number_of_ues: 4
-    number_of_aps: 24
+    number_of_aps: 10
     max_serving_ue_count: 4
-    max_measurment_ap_count: 24
+    max_measurment_ap_count: 10
     power_control_saved_model: ./envs/aps/lib/gnn_olp/trained_model/checkpoints/best_epoch=953.ckpt
     data_normalization_config: ./envs/aps/lib/gnn_olp/normalization_config.yaml
     precoding_algorithm: olp # olp, mrt
     seed: 100
     float_dtype_sim: torch.float32
     ap_radiation_power: 0.2
+

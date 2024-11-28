@@ -25,8 +25,8 @@ class PowerControl:
         sinr = numerator / denominator
         # to avoid -inf values:
         sinr[sinr == 0] = 1e-20
-        sinr_db = 10*torch.log10(sinr)
-        return sinr_db
+        # sinr_db = 10*torch.log10(sinr)
+        return sinr
 
     def get_power_consumption(self, allocated_power):
         return torch.sum(torch.norm(allocated_power, p=2, dim=1) ** 2) \
@@ -95,21 +95,32 @@ class OlpGnnPowerControl(PowerControl):
         same_ap_edges = []
         same_ue_edges = []  # edges id from 0 to n_ues*n_aps-1
         # UE type edges
-        for k in range(n_ues):
-            for m1 in range(n_aps):
-                for m2 in range(m1 + 1, n_aps):
-                    same_ue_edges.append([k * n_aps + m1, k * n_aps + m2])
-                    # reverse to make graph unoriented
-                    same_ue_edges.append([k * n_aps + m2, k * n_aps + m1])
+        # for k in range(n_ues):
+        #     for m1 in range(n_aps):
+        #         for m2 in range(m1 + 1, n_aps):
+        #             same_ue_edges.append([k * n_aps + m1, k * n_aps + m2])
+        #             # reverse to make graph unoriented
+        #             same_ue_edges.append([k * n_aps + m2, k * n_aps + m1])
+        for cntr_1 in range(n_ues * n_aps):
+            for cntr_2 in range(n_ues * n_aps):
+                if cntr_1 == cntr_2:
+                    continue
+                if cntr_1 % n_ues == cntr_2 % n_ues:
+                    same_ue_edges.append((cntr_1, cntr_2))
+                elif int(cntr_1 / n_ues) == int(cntr_2 / n_ues):
+                    same_ap_edges.append((cntr_1, cntr_2))
+                else:
+                    pass
+
         same_ue_edges = torch.tensor(same_ue_edges).t().contiguous().to(self.tpdv['device'])
-        # AP type edges
-        for m in range(n_aps):
-            for k1 in range(n_ues):
-                for k2 in range(k1 + 1, n_ues):
-                    same_ap_edges.append([k1 * n_aps + m, k2 * n_aps + m])
-                    # reverse to make graph unoriented
-                    same_ap_edges.append([k2 * n_aps + m, k1 * n_aps + m])
         same_ap_edges = torch.tensor(same_ap_edges).t().contiguous().to(self.tpdv['device'])
+        # # AP type edges
+        # for m in range(n_aps):
+        #     for k1 in range(n_ues):
+        #         for k2 in range(k1 + 1, n_ues):
+        #             same_ap_edges.append([k1 * n_aps + m, k2 * n_aps + m])
+        #             # reverse to make graph unoriented
+        #             same_ap_edges.append([k2 * n_aps + m, k1 * n_aps + m])
 
         data = HeteroData()
         data['channel'].x = None

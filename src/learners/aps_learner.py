@@ -78,7 +78,7 @@ class ApsLearner:
         target_mac_out = th.stack(target_mac_out, dim=1)  # Concat over time
 
         q_taken, _ = self.critic(batch["obs"][:, :-1], actions[:, :-1])
-        # print("q_taken: ", q_taken)
+
         if self.mixer is not None:
             if self.args.mixer == "vdn":
                 q_taken = self.mixer(q_taken.view(-1, self.n_agents, 1), batch["state"][:, :-1])
@@ -101,16 +101,13 @@ class ApsLearner:
 
         targets = build_td_lambda_targets_aps(batch["reward"], terminated, mask, target_vals, self.n_agents,
                                           self.args.gamma, self.args.td_lambda)
-        print("target: ", targets.shape)
-        
+
         mask = mask[:, :-1]
         td_error = (q_taken - targets.detach())
         mask = mask.expand_as(td_error)
         masked_td_error = td_error * mask
         loss = (masked_td_error ** 2).sum() / mask.sum()
 
-        print("loss: ", loss)
-        
         self.critic_optimiser.zero_grad()
         loss.backward()
         critic_grad_norm = th.nn.utils.clip_grad_norm_(self.critic_params, self.args.grad_norm_clip)
@@ -126,9 +123,7 @@ class ApsLearner:
             act_outs = self.mac.select_actions(batch, t_ep=t, t_env=t_env, test_mode=False, explore=False)
             mac_out.append(act_outs)
         mac_out = th.stack(mac_out, dim=1)  # Concat over time
-        print("mac_out: ", mac_out.shape)
         chosen_action_qvals, _ = self.critic(batch["obs"][:, :-1], mac_out)
-        print("chosen_action_qvals: ", chosen_action_qvals.shape)
         
         if self.mixer is not None:
             if self.args.mixer == "vdn":
@@ -141,7 +136,6 @@ class ApsLearner:
 
         # sum of Q values to be minimized
         chosen_action_qvals = th.sum(chosen_action_qvals, dim=2, keepdim=True)
-        print("chosen_action_qvals: ", chosen_action_qvals.shape)
 
         # Compute the actor loss
         # print("mask: ", mask.shape)
@@ -166,11 +160,14 @@ class ApsLearner:
 
         if t_env - self.log_stats_t >= self.args.learner_log_interval:
             self.logger.log_stat("critic_loss", loss.item(), t_env)
+            critic_count = masked_td_error.shape[0] + masked_td_error.shape[1] + masked_td_error.shape[2]
+            self.logger.log_stat("critic_individual_loss", loss.item() / critic_count, t_env)
             self.logger.log_stat("critic_grad_norm", critic_grad_norm, t_env)
             mask_elems = mask.sum().item()
             self.logger.log_stat("td_error_abs", masked_td_error.abs().sum().item() / mask_elems, t_env)
             self.logger.log_stat("target_mean", (targets * mask).sum().item() / (mask_elems * self.args.n_agents),
                                  t_env)
+            self.logger.log_stat("actor_loss", pg_loss.item(), t_env)
             self.log_stats_t = t_env
 
     def _update_targets_soft(self, tau):

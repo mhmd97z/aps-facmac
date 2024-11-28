@@ -80,9 +80,9 @@ class FACMACDiscreteCriticGNN(nn.Module):
         self.output_type = "q"
         self.hidden_states = None
 
-        hc = [self.input_shape, 128, 128]
+        hc = [self.input_shape, 64, 64]
         num_layers = len(hc)
-        heads = 2
+        heads = 4
         aggr = 'sum'
 
         self.convs = nn.ModuleList()
@@ -101,7 +101,7 @@ class FACMACDiscreteCriticGNN(nn.Module):
             self.convs.append(conv)
             self.norms.append(LayerNorm(hc[i+1]))
 
-        self.lin = Linear(hc[-1], 1)
+        self.lin = Linear(2*hc[-1], 1)
 
     def init_hidden(self, batch_size):
         # make hidden states on same device as model
@@ -123,25 +123,31 @@ class FACMACDiscreteCriticGNN(nn.Module):
         if actions is not None:
             batch = self.concat_action_to_graph(batch, actions)
     
+        # graph storage cannot be directly given to the GNN
         if isinstance(batch, GraphBatchStorage):
             out = []
             for b in range(actions.shape[0]):
                 this_batch = batch[b, :]
-                # print("this_batch: ", this_batch.batch_dict['channel'].shape)
                 batch_q, _ = self(this_batch)
                 out.append(batch_q.reshape((actions.shape[1], actions.shape[2])))
             return th.stack(out), None
 
+        # the actual critic dnn
         if hasattr(batch['channel'], 'batch'):
             channel_batch = batch['channel'].batch
         else:
             channel_batch = None
         x_dict = batch.x_dict
         edge_index_dict = batch.edge_index_dict
+
+        embedding = []
         for conv, norm in zip(self.convs, self.norms):
             x_dict = conv(x_dict, edge_index_dict)
-            x_dict = {'channel': norm(x_dict['channel'].relu(), channel_batch)}
-        q = self.lin(x_dict['channel'])
+            tmp = norm(x_dict['channel'].relu(), channel_batch)
+            x_dict = {'channel': tmp}
+            embedding.append(tmp)
+        embedding = th.cat(embedding, dim=1)
+        q = self.lin(embedding)
 
         return q, hidden_state
     
