@@ -8,9 +8,9 @@ class GNNAgent(nn.Module):
     def __init__(self, input_shape, args):
         super(GNNAgent, self).__init__()
         self.args = args
-        hc = [input_shape, 32, 32]
+        hc = [input_shape, 16, 16]
         num_layers = len(hc)
-        heads = 2
+        heads = 4
         aggr = 'sum'
 
         self.convs = nn.ModuleList()
@@ -29,7 +29,8 @@ class GNNAgent(nn.Module):
             self.convs.append(conv)
             self.norms.append(LayerNorm(hc[i+1]))
 
-        self.lin = Linear(2*hc[-1], args.n_actions)
+        self.lin1 = Linear(sum(hc), 16)
+        self.lin2 = Linear(16, args.n_actions)
 
         self.agent_return_logits = getattr(self.args, "agent_return_logits", False)
 
@@ -46,13 +47,20 @@ class GNNAgent(nn.Module):
         x_dict = batch.x_dict
         edge_index_dict = batch.edge_index_dict
 
-        embedding = []
+        print("\nin gnn_agent.forward(), input:", x_dict['channel'].shape)
+
+        embedding = [x_dict['channel']]
         for conv, norm in zip(self.convs, self.norms):
             x_dict = conv(x_dict, edge_index_dict)
             tmp = norm(x_dict['channel'].relu(), channel_batch)
             x_dict = {'channel': tmp}
             embedding.append(tmp)
         embedding = th.cat(embedding, dim=1)
-        actions = self.lin(embedding)
+        print("in gnn_agent.forward(), penultimate:", embedding.shape)
+        print("embedding[:5]: ", embedding[:5])
+        print("embedding[100:105]: ", embedding[100:105])
+        print("embedding[200:205]: ", embedding[200:205])
+        actions_init2 = self.lin1(embedding)
+        actions = self.lin2(actions_init2)
 
         return actions, hidden_state

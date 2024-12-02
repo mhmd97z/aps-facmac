@@ -18,7 +18,10 @@ class Aps(gym.Env):
             self.env_args['simulation_scenario']['precoding_algorithm'] == 'olp':
             self.feature_length = self.env_args['embedding_length'] + 1
         else:
-            self.feature_length = 4
+            if self.env_args['if_include_channel_rank']:
+                self.feature_length = 3
+            else:
+                self.feature_length = 2
 
         num_ues = self.simulator.scenario_conf['number_of_ues']
         num_aps = self.simulator.scenario_conf['number_of_aps']
@@ -48,15 +51,6 @@ class Aps(gym.Env):
         obs, state, reward, mask, info = self.compute_state_reward()
         done = False
 
-        # dict_ = {}
-        # dict_['obs'] = obs
-        # dict_['reward'] = reward
-        # dict_['action'] = actions
-        # import pickle
-        # with open('data_aps.pkl', 'wb') as file:
-        #     pickle.dump(dict_, file)
-        #     raise
-        # return obs, state, reward, mask, done, info
         return reward, done, info
 
 
@@ -75,30 +69,14 @@ class Aps(gym.Env):
             obs = state.clone().detach()
             state = state.unsqueeze(0) # .repeat(self.n_agents, 1, 1, 1)
         else:
-            # channel_coef = torch.mean(
-            #     simulator_info['channel_coef'].clone().detach(), axis=0
-            #     ).flatten()
-            # chan_magnitude, chan_phase = get_polar(channel_coef)
-            # obs = torch.cat(
-            #     (chan_magnitude.unsqueeze(0), chan_phase.unsqueeze(0), 
-            #      serving_mask.unsqueeze(0)), 
-            #     dim=0)
             graphs = simulator_info['graph']
             # TODO: aggregate over step length
             self.datastore.add(obs=graphs[0])
             graphs = self.datastore.get_last_k_elements()['obs']
             # TODO: aggregate over history
+            self.process_obs_graph(graphs[0])
             obs = graphs[0]
-            state = obs['channel'].x.unsqueeze(0) # .repeat(self.n_agents, 1, 1, 1)
-
-            # print("obs: ", obs)
-            # print("state: ", state.shape)
-
-        # # to get the history of state variables
-        # self.datastore.add(obs=obs)
-        # state = self.datastore.get_last_k_elements()['obs'].permute(2, 0, 1)
-        # obs = state.clone().detach()
-        # state = state.unsqueeze(0).repeat(self.n_agents, 1, 1, 1)
+            state = obs['channel'].x.unsqueeze(0).clone() # .repeat(self.n_agents, 1, 1, 1)
 
         # reward calc
         normalized_total_power_consumption = range_normalization(simulator_info['totoal_power_consumption'], 1, 5) # assumed range of power: 1, 5
@@ -107,31 +85,42 @@ class Aps(gym.Env):
             alpha = self.env_args['reward_power_consumption_coef']
             reward_ = ((1 - alpha) * normalized_min_sinr - alpha * normalized_total_power_consumption).mean()
         elif self.env_args['reward'] == 'se_requirement':
-            # min_sinr - threshold is expected to be > 0
             # measurement_mask = self.simulator.channel_manager.measurement_mask.clone().detach().flatten().to(torch.int32)
+
+            # power cost
             mu = self.env_args['reward_sla_viol_coef2']
-            power_coef = mu * torch.abs(torch.reshape(simulator_info['power_coef'], (-1, 1)))
-            threshold = self.env_args['sinr_threshold']
-            constraints = (simulator_info['sinr'] - threshold)
+            consumed_power = torch.abs(simulator_info['power_coef']).squeeze(dim=0)
+            if self.env_args['if_use_local_power_sum']:
+                consumed_power = consumed_power.sum(dim=0, keepdim=True).expand_as(consumed_power)
+            power_coef_cost = mu * torch.reshape(consumed_power, (-1, 1))
+            # print("consumed_power: ", consumed_power)
+            # print("power_coef: ", power_coef_cost)
+
+            # se cost
             eta = self.env_args['reward_sla_viol_coef1']
+            threshold = self.env_args['sinr_threshold']
+            print("simulator_info['sinr']: ", simulator_info['sinr'])
+            constraints = (simulator_info['sinr'] - threshold)
             if self.env_args['barrier_function'] == 'exponential':
-                print("simulator_info['sinr']: ", simulator_info['sinr'])
                 se_violation_cost = torch.clip(torch.exp(-eta * constraints), max=500) # / (measurement_mask.sum(dim=0) + 1)
-                print("in gym: se_violation_cost: ", se_violation_cost.shape, se_violation_cost)
+                # print("in gym: se_violation_cost: ", se_violation_cost.shape, se_violation_cost)
                 se_violation_cost = se_violation_cost.expand(self.num_aps, -1).clone()
                 # se_violation_cost *= measurement_mask
                 se_violation_cost = torch.reshape(se_violation_cost, (-1, 1))
-                print("in gym: se_violation_cost: ", se_violation_cost.shape, se_violation_cost)
+                # print("in gym: se_violation_cost: ", se_violation_cost.shape, se_violation_cost)
             elif self.env_args['barrier_function'] == 'step':
                 se_violation_cost = beta * (constraints < 0).float()
             else:
                 NotImplementedError
-            se_violation_cost[se_violation_cost < 5.] = power_coef[se_violation_cost < 5.]
-            # reward = (-se_violation_cost - power_coef).clone().detach()
-            reward = (-se_violation_cost).clone().detach()
-            print("in gym: power_coef: ", power_coef.shape, power_coef)
-            print("in gym: reward: ", reward)
-    
+
+            # final reward value
+            if self.env_args['if_sum_cost']:
+                reward = -(se_violation_cost + power_coef_cost).clone().detach()
+            else:
+                se_violation_cost[se_violation_cost < 5.] = power_coef_cost[se_violation_cost < 5.]
+                reward = -(se_violation_cost).clone().detach()
+            # print("in gym: reward: ", reward)
+
         else:
             raise NotImplementedError
         # reward = reward_.clone().detach()
@@ -147,10 +136,10 @@ class Aps(gym.Env):
             'reward': reward.mean(),
             'mean_serving_ap_count': serving_mask.reshape((self.num_aps, self.num_ues)).sum(dim=0).float().mean(),
             'se_violation_cost': se_violation_cost.mean(),
-            'power_coef': power_coef.mean()
+            'power_coef_cost': power_coef_cost.mean(),
+            'seed': self.simulator.seed
         }
 
-        
         return obs, state, reward, mask, info
 
 
@@ -173,8 +162,6 @@ class Aps(gym.Env):
         
         raise NotImplementedError
     
-        return obs
-
 
     def get_obs_size(self):
         """ Returns the shape of the observation """
@@ -229,3 +216,14 @@ class Aps(gym.Env):
                     "normalise_actions": False}
 
         return env_info
+
+    def process_obs_graph(self, graph):
+        x = graph['channel'].x[:, :2]
+        if self.env_args['if_include_channel_rank']:
+            sorted_indices = torch.argsort(x[:, 0]).to(device=x.device)
+            ranks = torch.empty_like(sorted_indices).to(device=x.device)        
+            ranks[sorted_indices] = torch.arange(len(x[:, 0])).to(device=x.device)
+            normalized_ranks = (ranks / (len(x[:, 0]) - 1)).unsqueeze(dim=1)
+            x = torch.cat((x, normalized_ranks), dim=1)
+        graph['channel'].x = x
+

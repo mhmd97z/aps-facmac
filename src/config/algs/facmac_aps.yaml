@@ -17,8 +17,8 @@ epsilon_decay_mode: ~
 gamma: 0.0
 grad_norm_clip: 1
 learner: aps_learner # "facmac_learner_discrete"
-lr: 0.025
-critic_lr: 0.005
+lr: 0.001
+critic_lr: 0.001
 td_lambda: 1.0
 critic_train_reps: 1
 mac: basic_mac

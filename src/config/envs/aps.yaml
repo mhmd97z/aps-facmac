@@ -1,17 +1,24 @@
 env: aps
-exp_name: critic_test/new_arch_epsilon05a5000 # new_rew_linear_sinr_less_aps_loose_req
+exp_name: powerindiv_norank_larger_dnns_clip1_lr001
 
 env_args:
+  episode_limit: 8
+  
+  # state
   use_gnn_embedding: False
   embedding_length: 16
   history_length: 1
+  if_include_channel_rank: False
+
+  # reward
   reward: se_requirement
   reward_power_consumption_coef: 0.0
   sinr_threshold: 0.5
+  if_use_local_power_sum: False
   barrier_function: exponential # exponential
   reward_sla_viol_coef1: 20 # 10-20 for step, 5 for exponential
   reward_sla_viol_coef2: 200
-  episode_limit: 8
+  if_sum_cost: False
 
   simulation_scenario:
     if_use_cuda_sim: True

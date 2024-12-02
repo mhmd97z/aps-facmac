@@ -80,7 +80,7 @@ class FACMACDiscreteCriticGNN(nn.Module):
         self.output_type = "q"
         self.hidden_states = None
 
-        hc = [self.input_shape, 64, 64]
+        hc = [self.input_shape, 32, 32]
         num_layers = len(hc)
         heads = 4
         aggr = 'sum'
@@ -101,7 +101,8 @@ class FACMACDiscreteCriticGNN(nn.Module):
             self.convs.append(conv)
             self.norms.append(LayerNorm(hc[i+1]))
 
-        self.lin = Linear(2*hc[-1], 1)
+        self.lin1 = Linear(sum(hc), 32)
+        self.lin2 = Linear(32, 1)
 
     def init_hidden(self, batch_size):
         # make hidden states on same device as model
@@ -140,14 +141,16 @@ class FACMACDiscreteCriticGNN(nn.Module):
         x_dict = batch.x_dict
         edge_index_dict = batch.edge_index_dict
 
-        embedding = []
+        embedding = [x_dict['channel']]
         for conv, norm in zip(self.convs, self.norms):
             x_dict = conv(x_dict, edge_index_dict)
             tmp = norm(x_dict['channel'].relu(), channel_batch)
             x_dict = {'channel': tmp}
             embedding.append(tmp)
         embedding = th.cat(embedding, dim=1)
-        q = self.lin(embedding)
+        print("in gnn_critic.forward(), penultimate:", embedding.shape, embedding)
+        q_init = self.lin1(embedding)
+        q = self.lin2(q_init)
 
         return q, hidden_state
     
