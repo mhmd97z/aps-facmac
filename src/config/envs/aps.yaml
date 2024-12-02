@@ -34,4 +34,4 @@ env_args:
     seed: 100
     float_dtype_sim: torch.float32
     ap_radiation_power: 0.2
-
+    if_sinr_in_db: False

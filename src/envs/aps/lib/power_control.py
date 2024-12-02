@@ -25,8 +25,11 @@ class PowerControl:
         sinr = numerator / denominator
         # to avoid -inf values:
         sinr[sinr == 0] = 1e-20
-        # sinr_db = 10*torch.log10(sinr)
-        return sinr
+        
+        if self.conf['if_sinr_in_db']:
+            return 10*torch.log10(sinr)
+        else:
+            return sinr
 
     def get_power_consumption(self, allocated_power):
         return torch.sum(torch.norm(allocated_power, p=2, dim=1) ** 2) \
