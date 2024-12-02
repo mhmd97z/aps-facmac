@@ -1,9 +1,9 @@
 env: aps
-exp_name: powerindiv_norank_larger_dnns_clip1_lr001
+exp_name: aps20/localpowersum0_sumcost0_db0_scoef20_pcoef1000
 
 env_args:
   episode_limit: 8
-  
+
   # state
   use_gnn_embedding: False
   embedding_length: 16
@@ -13,11 +13,11 @@ env_args:
   # reward
   reward: se_requirement
   reward_power_consumption_coef: 0.0
-  sinr_threshold: 0.5
-  if_use_local_power_sum: False
+  sinr_threshold: 0.5 # -3
   barrier_function: exponential # exponential
   se_coef: 20 # 10-20 for step, 5 for exponential
-  power_coef: 200
+  power_coef: 1000
+  if_use_local_power_sum: False
   if_sum_cost: False
 
   simulation_scenario:
@@ -25,9 +25,9 @@ env_args:
     step_length: 1
     morphology: urban
     number_of_ues: 4
-    number_of_aps: 10
+    number_of_aps: 20
     max_serving_ue_count: 4
-    max_measurment_ap_count: 10
+    max_measurment_ap_count: 20
     power_control_saved_model: ./envs/aps/lib/gnn_olp/trained_model/checkpoints/best_epoch=953.ckpt
     data_normalization_config: ./envs/aps/lib/gnn_olp/normalization_config.yaml
     precoding_algorithm: olp # olp, mrt

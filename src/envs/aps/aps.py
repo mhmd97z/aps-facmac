@@ -113,11 +113,15 @@ class Aps(gym.Env):
             else:
                 NotImplementedError
 
+            print("se_violation_cost: ", se_violation_cost)
+            print("power_coef_cost: ", power_coef_cost)
+            print("")
             # final reward value
             if self.env_args['if_sum_cost']:
                 reward = -(se_violation_cost + power_coef_cost).clone().detach()
             else:
-                se_violation_cost[se_violation_cost < 5.] = power_coef_cost[se_violation_cost < 5.]
+                reward = se_violation_cost.clone()
+                reward[reward < 5.] = power_coef_cost[reward < 5.]
                 reward = -(se_violation_cost).clone().detach()
             # print("in gym: reward: ", reward)
 

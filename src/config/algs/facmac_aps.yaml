@@ -1,6 +1,6 @@
 # --- FACMAC specific parameters ---
 action_selector: gumbel
-epsilon_start: 0.5
+epsilon_start: 0.9
 epsilon_finish: 0.01
 epsilon_anneal_time: 5000
 agent: gnn

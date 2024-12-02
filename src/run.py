@@ -39,7 +39,7 @@ def run(_run, _config, _log, pymongo_client=None):
     _log.info("\n\n" + experiment_params + "\n")
 
     # configure tensorboard logger
-    unique_token = "{}_{}".format(args.env_args['reward_sla_viol_coef1'], args.env_args['reward_sla_viol_coef2']) # datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    unique_token = "scoef{}_pcoef{}".format(args.env_args['se_coef'], args.env_args['power_coef']) # datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
     args.unique_token = unique_token
     if args.use_tensorboard:
         tb_logs_direc = os.path.join(dirname(dirname(abspath(__file__))), "results", "tb_logs", f"{args.name}", f"{args.exp_name}")
