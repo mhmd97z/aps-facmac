@@ -16,8 +16,8 @@ env_args:
   sinr_threshold: 0.5
   if_use_local_power_sum: False
   barrier_function: exponential # exponential
-  reward_sla_viol_coef1: 20 # 10-20 for step, 5 for exponential
-  reward_sla_viol_coef2: 200
+  se_coef: 20 # 10-20 for step, 5 for exponential
+  power_coef: 200
   if_sum_cost: False
 
   simulation_scenario:

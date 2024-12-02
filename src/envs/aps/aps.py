@@ -88,7 +88,7 @@ class Aps(gym.Env):
             # measurement_mask = self.simulator.channel_manager.measurement_mask.clone().detach().flatten().to(torch.int32)
 
             # power cost
-            mu = self.env_args['reward_sla_viol_coef2']
+            mu = self.env_args['power_coef']
             consumed_power = torch.abs(simulator_info['power_coef']).squeeze(dim=0)
             if self.env_args['if_use_local_power_sum']:
                 consumed_power = consumed_power.sum(dim=0, keepdim=True).expand_as(consumed_power)
@@ -97,7 +97,7 @@ class Aps(gym.Env):
             # print("power_coef: ", power_coef_cost)
 
             # se cost
-            eta = self.env_args['reward_sla_viol_coef1']
+            eta = self.env_args['se_coef']
             threshold = self.env_args['sinr_threshold']
             print("simulator_info['sinr']: ", simulator_info['sinr'])
             constraints = (simulator_info['sinr'] - threshold)
