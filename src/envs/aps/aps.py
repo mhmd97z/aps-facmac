@@ -90,6 +90,9 @@ class Aps(gym.Env):
             # power cost
             mu = self.env_args['power_coef']
             consumed_power = torch.abs(simulator_info['power_coef']).squeeze(dim=0)
+            if self.env_args['simulation_scenario']['if_power_in_db']:
+                consumed_power = 10 * torch.log10(consumed_power)
+                consumed_power = torch.clip(consumed_power, min=-30) + 31
             if self.env_args['if_use_local_power_sum']:
                 consumed_power = consumed_power.sum(dim=0, keepdim=True).expand_as(consumed_power)
             power_coef_cost = mu * torch.reshape(consumed_power, (-1, 1))
@@ -120,9 +123,8 @@ class Aps(gym.Env):
             if self.env_args['if_sum_cost']:
                 reward = -(se_violation_cost + power_coef_cost).clone().detach()
             else:
-                reward = se_violation_cost.clone()
-                reward[reward < 5.] = power_coef_cost[reward < 5.]
-                reward = -(se_violation_cost).clone().detach()
+                reward = - se_violation_cost.clone().detach()
+                reward[se_violation_cost < 5.] = - power_coef_cost[se_violation_cost < 5.].clone().detach()
             # print("in gym: reward: ", reward)
 
         else:

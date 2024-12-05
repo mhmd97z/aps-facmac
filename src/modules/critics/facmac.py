@@ -80,7 +80,7 @@ class FACMACDiscreteCriticGNN(nn.Module):
         self.output_type = "q"
         self.hidden_states = None
 
-        hc = [self.input_shape, 32, 32]
+        hc = [32, 32, 32]
         num_layers = len(hc)
         heads = 4
         aggr = 'sum'
@@ -101,6 +101,7 @@ class FACMACDiscreteCriticGNN(nn.Module):
             self.convs.append(conv)
             self.norms.append(LayerNorm(hc[i+1]))
 
+        self.lin0 = Linear(self.input_shape, 32)
         self.lin1 = Linear(sum(hc), 32)
         self.lin2 = Linear(32, 1)
 
@@ -141,6 +142,7 @@ class FACMACDiscreteCriticGNN(nn.Module):
         x_dict = batch.x_dict
         edge_index_dict = batch.edge_index_dict
 
+        x_dict['channel'] = self.lin0(x_dict['channel'])
         embedding = [x_dict['channel']]
         for conv, norm in zip(self.convs, self.norms):
             x_dict = conv(x_dict, edge_index_dict)
@@ -153,7 +155,7 @@ class FACMACDiscreteCriticGNN(nn.Module):
         q = self.lin2(q_init)
 
         return q, hidden_state
-    
+
     def _get_input_shape(self, scheme):
         input_shape = scheme["obs"]["vshape"]
         return input_shape

@@ -8,7 +8,7 @@ class GNNAgent(nn.Module):
     def __init__(self, input_shape, args):
         super(GNNAgent, self).__init__()
         self.args = args
-        hc = [input_shape, 16, 16]
+        hc = [32, 32, 32]
         num_layers = len(hc)
         heads = 4
         aggr = 'sum'
@@ -29,8 +29,9 @@ class GNNAgent(nn.Module):
             self.convs.append(conv)
             self.norms.append(LayerNorm(hc[i+1]))
 
-        self.lin1 = Linear(sum(hc), 16)
-        self.lin2 = Linear(16, args.n_actions)
+        self.lin0 = Linear(input_shape, 32)
+        self.lin1 = Linear(sum(hc), 32)
+        self.lin2 = Linear(32, args.n_actions)
 
         self.agent_return_logits = getattr(self.args, "agent_return_logits", False)
 
@@ -47,6 +48,7 @@ class GNNAgent(nn.Module):
         x_dict = batch.x_dict
         edge_index_dict = batch.edge_index_dict
 
+        x_dict['channel'] = self.lin0(x_dict['channel'])
         embedding = [x_dict['channel']]
         for conv, norm in zip(self.convs, self.norms):
             x_dict = conv(x_dict, edge_index_dict)
